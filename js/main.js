@@ -25,10 +25,11 @@ async function loadCatalog() {
     }
 
     const repoLink = document.getElementById("repo-link");
+    const repoSeparator = document.getElementById("repo-separator");
     if (data.site?.repo) {
       repoLink.href = data.site.repo;
-    } else {
-      repoLink.hidden = true;
+      repoLink.hidden = false;
+      repoSeparator.hidden = false;
     }
 
     const games = data.games ?? [];
