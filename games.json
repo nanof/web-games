@@ -1,0 +1,17 @@
+{
+  "site": {
+    "title": "Mis Juegos HTML5",
+    "description": "Colección de juegos hechos en el navegador"
+  },
+  "games": [
+    {
+      "id": "demo",
+      "title": "Juego Demo",
+      "description": "Un canvas simple para probar el portal",
+      "path": "games/demo/index.html",
+      "thumbnail": "games/demo/thumb.png",
+      "tags": ["demo"],
+      "date": "2026-05-28"
+    }
+  ]
+}

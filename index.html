@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Juegos HTML5</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1 id="site-title">Mis Juegos HTML5</h1>
+    <p id="site-description" class="site-description">Cargando…</p>
+  </header>
+
+  <main class="container">
+    <div id="games-grid" class="games-grid" aria-live="polite"></div>
+    <p id="empty-state" class="empty-state" hidden>No hay juegos publicados todavía.</p>
+    <p id="error-state" class="error-state" hidden></p>
+  </main>
+
+  <footer class="site-footer">
+    <p>Juegos HTML5 · <a href="https://github.com" id="repo-link" rel="noopener noreferrer">Repositorio</a></p>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
