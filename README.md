@@ -60,10 +60,14 @@ Luego abre `http://localhost:3000` en el navegador.
 
 ### Opción rápida (recomendada)
 
+Este repo usa tu email personal en los commits (`ignacio.mr@gmail.com`). Al iniciar sesión en GitHub, entra con tu **cuenta personal**, no la del trabajo.
+
 ```powershell
 gh auth login
 .\scripts\deploy.ps1
 ```
+
+Si `gh` ya estaba con otra cuenta: `gh auth logout` y vuelve a hacer login con la personal.
 
 El script crea el repo `web-games`, sube el código y activa GitHub Pages. La URL será `https://<tu-usuario>.github.io/web-games/`.
 
