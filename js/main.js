@@ -24,6 +24,13 @@ async function loadCatalog() {
       descEl.textContent = "";
     }
 
+    const repoLink = document.getElementById("repo-link");
+    if (data.site?.repo) {
+      repoLink.href = data.site.repo;
+    } else {
+      repoLink.hidden = true;
+    }
+
     const games = data.games ?? [];
 
     if (games.length === 0) {

@@ -58,11 +58,24 @@ Luego abre `http://localhost:3000` en el navegador.
 
 ## Despliegue (GitHub Pages)
 
-1. Sube el repo a GitHub.
+### Opción rápida (recomendada)
+
+```powershell
+gh auth login
+.\scripts\deploy.ps1
+```
+
+El script crea el repo `web-games`, sube el código y activa GitHub Pages. La URL será `https://<tu-usuario>.github.io/web-games/`.
+
+### Opción manual
+
+1. Sube el repo a GitHub (`gh repo create web-games --public --source=. --remote=origin --push`).
 2. Ve a **Settings → Pages**.
 3. En **Source**, elige **Deploy from a branch**.
 4. Branch: `main`, Folder: `/ (root)`.
 5. Guarda. La URL será `https://<tu-usuario>.github.io/web-games/`.
+
+Opcional: añade en `games.json` el campo `site.repo` con la URL de tu repositorio para mostrar el enlace en el pie de página.
 
 ## Volver al portal desde un juego
 
