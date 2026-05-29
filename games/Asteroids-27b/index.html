@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Juego Espacial con Audio y Disparo Corregido</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0a0a12;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+    }
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      font-size: 18px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+    #controls {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 14px;
+      opacity: 0.8;
+      text-align: center;
+      pointer-events: none;
+    }
+    #start-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="600" height="800"></canvas>
+  <div id="ui">Puntuación: <span id="score">0</span> | Vidas: <span id="lives">3</span></div>
+  <div id="controls">← → Mover | ESPACIO Disparar | P Pausa</div>
+  <div id="start-overlay">👆 Haz clic o presiona una tecla para iniciar el audio y jugar</div>
+</div>
+
+<script>
+// ================= CONFIGURACIÓN =================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const overlay = document.getElementById('start-overlay');
+
+let gameRunning = false;
+let paused = false;
+let score = 0;
+let lives = 3;
+let lastShotTime = 0;
+const SHOOT_COOLDOWN = 250; // ms entre disparos
+const GAME_SPEED = 1.0;     // Multiplicador global de velocidad
+
+// ================= AUDIO (Web Audio API) =================
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(e => console.warn('Audio no pudo reanudarse:', e));
+  }
+}
+
+function playSound(type) {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    switch(type) {
+      case 'shoot':
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.12);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.13);
+        break;
+      case 'explosion':
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+        break;
+      case 'hit':
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.linearRampToValueAtTime(100, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        break;
+    }
+  } catch (e) {
+    console.warn('Error de audio:', e);
+  }
+}
+
+// ================= ENTIDADES =================
+const ship = { x: canvas.width / 2, y: canvas.height - 60, width: 40, height: 30, speed: 5 };
+let bullets = [];
+let ufos = [];
+let particles = [];
+let keys = {};
+
+// ================= LÓGICA DE JUEGO =================
+function spawnUFO() {
+  const size = 25 + Math.random() * 15;
+  ufos.push({
+    x: Math.random() * (canvas.width - size),
+    y: -size,
+    width: size,
+    height: size,
+    speed: (1.5 + Math.random() * 2) * GAME_SPEED,
+    hp: Math.floor(size / 10)
+  });
+}
+
+function createExplosion(x, y, color = '#ffaa00') {
+  for (let i = 0; i < 12; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 30 + Math.random() * 20,
+      color
+    });
+  }
+}
+
+function update() {
+  if (!gameRunning || paused) return;
+
+  // Movimiento nave
+  if (keys['ArrowLeft'] && ship.x > 0) ship.x -= ship.speed * GAME_SPEED;
+  if (keys['ArrowRight'] && ship.x < canvas.width - ship.width) ship.x += ship.speed * GAME_SPEED;
+
+  // Disparo
+  const now = Date.now();
+  if (keys['Space'] && now - lastShotTime >= SHOOT_COOLDOWN) {
+    bullets.push({ x: ship.x + ship.width / 2, y: ship.y, speed: 8 });
+    lastShotTime = now;
+    playSound('shoot');
+  }
+
+  // Balas
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    bullets[i].y -= bullets[i].speed * GAME_SPEED;
+    if (bullets[i].y < 0) bullets.splice(i, 1);
+  }
+
+  // UFOs
+  if (Math.random() < 0.02 * GAME_SPEED) spawnUFO();
+  
+  for (let i = ufos.length - 1; i >= 0; i--) {
+    const ufo = ufos[i];
+    ufo.y += ufo.speed;
+
+    // Colisión bala-UFO
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      if (b.x > ufo.x && b.x < ufo.x + ufo.width &&
+          b.y > ufo.y && b.y < ufo.y + ufo.height) {
+        ufo.hp--;
+        bullets.splice(j, 1);
+        createExplosion(b.x, b.y, '#00ffff');
+        if (ufo.hp <= 0) {
+          score += 10;
+          scoreEl.textContent = score;
+          playSound('explosion');
+          createExplosion(ufo.x + ufo.width/2, ufo.y + ufo.height/2, '#ff5500');
+          ufos.splice(i, 1);
+        } else {
+          playSound('hit');
+        }
+        break;
+      }
+    }
+
+    // Colisión nave-UFO o salida de pantalla
+    if (ufo.y > canvas.height) {
+      ufos.splice(i, 1);
+      continue;
+    }
+    
+    const dx = ship.x - ufo.x;
+    const dy = ship.y - ufo.y;
+    if (Math.abs(dx) < (ship.width + ufo.width)/2 && Math.abs(dy) < (ship.height + ufo.height)/2) {
+      lives--;
+      livesEl.textContent = lives;
+      playSound('explosion');
+      createExplosion(ship.x, ship.y, '#ff0055');
+      ufos.splice(i, 1);
+      if (lives <= 0) gameOver();
+    }
+  }
+
+  // Partículas
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Estrellas de fondo
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 50; i++) {
+    const x = (i * 137) % canvas.width;
+    const y = ((Date.now() / 20 + i * 47) % canvas.height);
+    ctx.fillRect(x, y, 1.5, 1.5);
+  }
+
+  // Nave
+  ctx.fillStyle = '#00ccff';
+  ctx.beginPath();
+  ctx.moveTo(ship.x + ship.width/2, ship.y);
+  ctx.lineTo(ship.x, ship.y + ship.height);
+  ctx.lineTo(ship.x + ship.width, ship.y + ship.height);
+  ctx.closePath();
+  ctx.fill();
+
+  // Balas
+  ctx.fillStyle = '#ffff00';
+  bullets.forEach(b => {
+    ctx.fillRect(b.x - 2, b.y, 4, 12);
+  });
+
+  // UFOs
+  ufos.forEach(ufo => {
+    ctx.fillStyle = `hsl(${(Date.now()/5 + ufo.x) % 360}, 70%, 60%)`;
+    ctx.beginPath();
+    ctx.ellipse(ufo.x + ufo.width/2, ufo.y + ufo.height/2, ufo.width/2, ufo.height/3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Ventana
+    ctx.fillStyle = '#aaffff';
+    ctx.beginPath();
+    ctx.arc(ufo.x + ufo.width/2, ufo.y + ufo.height/2 - 5, ufo.width/4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Partículas
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  });
+  ctx.globalAlpha = 1;
+
+  // Pausa/Game Over
+  if (paused) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.font = '32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSA', canvas.width/2, canvas.height/2);
+  } else if (!gameRunning) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ff4444';
+    ctx.font = '36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 20);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif';
+    ctx.fillText(`Puntuación final: ${score}`, canvas.width/2, canvas.height/2 + 20);
+    ctx.fillText('Presiona R para reiniciar', canvas.width/2, canvas.height/2 + 50);
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function gameOver() {
+  gameRunning = false;
+}
+
+function resetGame() {
+  score = 0; lives = 3;
+  scoreEl.textContent = score; livesEl.textContent = lives;
+  bullets = []; ufos = []; particles = [];
+  ship.x = canvas.width / 2;
+  gameRunning = true; paused = false;
+}
+
+// ================= CONTROLES =================
+window.addEventListener('keydown', e => {
+  if (!gameRunning && e.code === 'KeyR') resetGame();
+  
+  keys[e.code] = true;
+  
+  if (e.code === 'Space' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    initAudio(); // Asegura que el audio esté activo en la primera interacción
+    overlay.style.display = 'none';
+  }
+  
+  if (e.code === 'KeyP' && gameRunning) paused = !paused;
+});
+
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Iniciar loop
+gameLoop();
+</script>
+
+</body>
+</html>

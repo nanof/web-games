@@ -5,13 +5,85 @@
   },
   "games": [
     {
-      "id": "demo",
-      "title": "Juego Demo",
-      "description": "Un canvas simple para probar el portal",
-      "path": "games/demo/index.html",
-      "thumbnail": "games/demo/thumb.png",
-      "tags": ["demo"],
+      "id": "Asteroids 27b",
+      "title": "Asteroids 27b",
+      "description": "Asteroids  27b",
+      "path": "games/Asteroids-27b/index.html",
+      "thumbnail": "games/Asteroids-27b/screenshot.png",
+      "tags": ["27b"],
       "date": "2026-05-28"
-    }
+    },
+    {
+      "id": "Asteroids-35b",
+      "title": "Asteroids-35b",
+      "description": "Asteroids-35b",
+      "path": "games/Asteroids-35b/index.html",
+      "thumbnail": "games/Asteroids-35b/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Frogger-35b",
+      "title": "Frogger-35b",
+      "description": "Frogger-35b",
+      "path": "games/frogger/index.html",
+      "thumbnail": "games/frogger/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Profanation-27b",
+      "title": "Profanation-27b",
+      "description": "Profanation-27b",
+      "path": "games/profanation/index.html",
+      "thumbnail": "games/profanation/screenshot.png",
+      "tags": ["27b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Galaga-35b",
+      "title": "Galaga-35b",
+      "description": "Galaga-35b",
+      "path": "games/galaga/index.html",
+      "thumbnail": "games/galaga/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Space Invaders",
+      "title": "Space Invaders",
+      "description": "Space Invaders",
+      "path": "games/space invaders/index.html",
+      "thumbnail": "games/space invaders/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Arkanoid 27",
+      "title": "Arkanoid",
+      "description": "Arkanoid",
+      "path": "games/arkanoid-27b/index.html",
+      "thumbnail": "games/arkanoid-27b/screenshot.png",
+      "tags": ["27b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "Arkanoid 35",
+      "title": "Arkanoid",
+      "description": "Arkanoid",
+      "path": "games/arkanoid-35b/index.html",
+      "thumbnail": "games/arkanoid-35b/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    },
+    {
+      "id": "PacMan",
+      "title": "PacMan",
+      "description": "PacMan",
+      "path": "games/pacman/index.html",
+      "thumbnail": "games/pacman/screenshot.png",
+      "tags": ["35b"],
+      "date": "2026-05-28"
+    }		
   ]
 }

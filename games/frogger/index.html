@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frogger - Clásico</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+}
+
+#gameContainer {
+    position: relative;
+    text-align: center;
+}
+
+h1 {
+    color: #39ff14;
+    font-size: 2.5em;
+    margin-bottom: 8px;
+    text-shadow: 0 0 10px #39ff14, 0 0 20px #0f0;
+    letter-spacing: 6px;
+}
+
+#hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 560px;
+    margin: 0 auto 8px;
+    color: #fff;
+    font-size: 1.1em;
+}
+
+#hud span { padding: 4px 12px; background: rgba(0,0,0,0.5); border-radius: 6px; }
+
+#scoreVal { color: #ffcc00; font-weight: bold; }
+#livesVal { color: #39ff14; font-weight: bold; }
+#levelVal { color: #ff6600; font-weight: bold; }
+
+canvas {
+    border: 3px solid #39ff14;
+    border-radius: 8px;
+    box-shadow: 0 0 25px rgba(57, 255, 20, 0.3), inset 0 0 25px rgba(0,0,0,0.5);
+    display: block;
+    margin: 0 auto;
+}
+
+#controls {
+    margin-top: 12px;
+    color: #aaa;
+    font-size: 0.85em;
+}
+
+#restartBtn {
+    margin-top: 10px;
+    padding: 10px 30px;
+    font-family: 'Courier New', monospace;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #fff;
+    background: linear-gradient(180deg, #e74c3c, #c0392b);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+}
+
+#restartBtn:hover {
+    background: linear-gradient(180deg, #ff6b5a, #e74c3c);
+    box-shadow: 0 0 15px rgba(231, 76, 60, 0.5);
+    transform: scale(1.05);
+}
+
+#mobileControls {
+    display: none;
+    margin-top: 10px;
+    user-select: none;
+}
+
+#mobileControls button {
+    width: 60px; height: 60px;
+    font-size: 1.8em;
+    background: rgba(57,255,20,0.15);
+    border: 2px solid #39ff14;
+    color: #39ff14;
+    border-radius: 10px;
+    cursor: pointer;
+    margin: 2px;
+}
+
+#mobileControls button:active { background: rgba(57,255,20,0.4); }
+
+@media (max-width: 600px) {
+    h1 { font-size: 1.5em; }
+    #hud { font-size: 0.85em; flex-wrap: wrap; gap: 4px; justify-content: center; }
+    canvas { max-width: 95vw; }
+    #mobileControls { display: grid; grid-template-columns: repeat(3,60px); justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <h1>F R O G G E R</h1>
+    <div id="hud">
+        <span>Puntos: <b id="scoreVal">0</b></span>
+        <span>Nivel: <b id="levelVal">1</b></span>
+        <span>Vidas: <b id="livesVal">♥♥♥</b></span>
+    </div>
+    <canvas id="gameCanvas" width="560" height="560"></canvas>
+    <br>
+    <button id="restartBtn" onclick="resetGame()">⟳ REINICIAR</button>
+    <div id="controls">⬆⬇⬅➡ Flechas para mover | R Reiniciar</div>
+    <div id="mobileControls">
+        <div></div><button ontouchstart="mobileInput('up')" onclick="mobileInput('up')">▲</button><div></div>
+        <button ontouchstart="mobileInput('left')" onclick="mobileInput('left')">◄</button>
+        <button ontouchstart="mobileInput('down')" onclick="mobileInput('down')">▼</button>
+        <button ontouchstart="mobileInput('right')" onclick="mobileInput('right')">►</button>
+    </div>
+</div>
+
+<script>
+// ============================================================
+//  FROGGER - Juego completo en un solo archivo HTML5 Canvas
+// ============================================================
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+const GRID = 40; // tamaño de cada celda
+const COLS = W / GRID;   // 14
+const ROWS = H / GRID;   // 14
+
+// --- Audio Context (Web Audio API) ---
+let audioCtx = null;
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    switch(type) {
+        case 'jump':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+            osc.start(now); osc.stop(now + 0.12);
+            break;
+        case 'crash':
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, now);
+            osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+            gain.gain.setValueAtTime(0.25, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+            break;
+        case 'home':
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523, now);
+            osc.frequency.setValueAtTime(659, now + 0.1);
+            osc.frequency.setValueAtTime(784, now + 0.2);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc.start(now); osc.stop(now + 0.35);
+            break;
+        case 'log':
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.start(now); osc.stop(now + 0.08);
+            break;
+        case 'gameover':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.setValueAtTime(300, now+0.15);
+            osc.frequency.setValueAtTime(200, now+0.3);
+            osc.frequency.setValueAtTime(100, now+0.45);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            osc.start(now); osc.stop(now + 0.6);
+            break;
+        case 'win':
+            osc.type = 'sine';
+            [523,659,784,1047].forEach((f,i) => {
+                osc.frequency.setValueAtTime(f, now + i*0.12);
+            });
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            osc.start(now); osc.stop(now + 0.6);
+            break;
+    }
+}
+
+// --- Estado del juego ---
+let score = 0;
+let lives = 3;
+let level = 1;
+let gameState = 'playing'; // playing, dead, gameover, win
+let deathTimer = 0;
+let homeSlots = [false, false, false, false, false]; // 5 slots en la parte superior
+let frog = { x: 7 * GRID, y: 13 * GRID, dir: 'up', moving: false };
+let vehicles = [];
+let logs = [];
+let turtles = [];
+let particles = [];
+
+// --- Definición de carriles ---
+const ROAD_ROWS = [8, 9, 10, 11, 12]; // filas con carretera (de arriba a abajo)
+const RIVER_ROWS = [3, 4, 5, 6, 7];   // filas con río
+
+function getSpeedMultiplier() { return 1 + (level - 1) * 0.15; }
+
+function initVehicles() {
+    vehicles = [];
+    const spd = getSpeedMultiplier();
+
+    // Fila 8: coches pequeños rápidos → ← →
+    for (let i = 0; i < 3; i++) {
+        vehicles.push({ x: i * 200, y: ROAD_ROWS[0], dir: 1, speed: 2.5*spd, type: 'car_small', w: 2, h: 1 });
+    }
+    for (let i = 0; i < 3; i++) {
+        vehicles.push({ x: W - i * 180, y: ROAD_ROWS[1], dir: -1, speed: 2.5*spd, type: 'car_small', w: 2, h: 1 });
+    }
+
+    // Fila 9: camiones lentos ← ← →
+    for (let i = 0; i < 2; i++) {
+        vehicles.push({ x: W - i * 300, y: ROAD_ROWS[2], dir: -1, speed: 1.5*spd, type: 'truck', w: 3, h: 1 });
+    }
+    for (let i = 0; i < 2; i++) {
+        vehicles.push({ x: i * 280, y: ROAD_ROWS[3], dir: 1, speed: 1.5*spd, type: 'truck', w: 3, h: 1 });
+    }
+
+    // Fila 12: coches medianos → ←
+    for (let i = 0; i < 4; i++) {
+        vehicles.push({ x: i * 160 + Math.random()*50, y: ROAD_ROWS[4], dir: 1, speed: 3*spd, type: 'car_med', w: 2, h: 1 });
+    }
+    for (let i = 0; i < 4; i++) {
+        vehicles.push({ x: W - i * 150 - Math.random()*50, y: ROAD_ROWS[4], dir: -1, speed: 3*spd, type: 'car_med', w: 2, h: 1 });
+    }
+
+    // Fila 11: coches rápidos alternados
+    for (let i = 0; i < 3; i++) {
+        vehicles.push({ x: i * 220 + Math.random()*80, y: ROAD_ROWS[4], dir: 1, speed: 3.5*spd, type: 'car_fast', w: 2, h: 1 });
+    }
+}
+
+function initLogs() {
+    logs = [];
+    const spd = getSpeedMultiplier();
+
+    // Fila 7: troncos largos → ← →
+    for (let i = 0; i < 3; i++) {
+        logs.push({ x: i * 250, y: RIVER_ROWS[0], dir: 1, speed: 1.8*spd, w: 4 });
+    }
+    for (let i = 0; i < 3; i++) {
+        logs.push({ x: W - i * 230, y: RIVER_ROWS[1], dir: -1, speed: 1.8*spd, w: 4 });
+    }
+
+    // Fila 6: troncos cortos → ←
+    for (let i = 0; i < 4; i++) {
+        logs.push({ x: i * 170 + Math.random()*50, y: RIVER_ROWS[2], dir: 1, speed: 2.5*spd, w: 3 });
+    }
+    for (let i = 0; i < 4; i++) {
+        logs.push({ x: W - i * 160 - Math.random()*50, y: RIVER_ROWS[3], dir: -1, speed: 2.5*spd, w: 3 });
+    }
+
+    // Fila 5: troncos extra largos → ←
+    for (let i = 0; i < 2; i++) {
+        logs.push({ x: i * 400 + Math.random()*100, y: RIVER_ROWS[4], dir: 1, speed: 1.2*spd, w: 5 });
+    }
+    for (let i = 0; i < 2; i++) {
+        logs.push({ x: W - i * 380 - Math.random()*100, y: RIVER_ROWS[4], dir: -1, speed: 1.2*spd, w: 5 });
+    }
+
+    // Turtles (tortugas) en fila 6
+    for (let i = 0; i < 3; i++) {
+        turtles.push({ x: i * 200 + Math.random()*80, y: RIVER_ROWS[1], dir: -1, speed: 2*spd, w: 3 });
+    }
+}
+
+function resetFrog() {
+    frog.x = 7 * GRID;
+    frog.y = 13 * GRID;
+    frog.dir = 'up';
+    frog.moving = false;
+}
+
+// --- Dibujado del sapo ( Frog ) ---
+function drawFrog(x, y) {
+    const cx = x + GRID/2;
+    const cy = y + GRID/2;
+    const s = GRID * 0.45;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Sombra
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(2, 4, s*0.9, s*0.5, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Cuerpo
+    ctx.fillStyle = '#2ecc40';
+    ctx.strokeStyle = '#1a8a25';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s, s*0.85, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Ojos (protuberancias)
+    ctx.fillStyle = '#2ecc40';
+    ctx.beginPath();
+    ctx.arc(-s*0.5, -s*0.6, s*0.35, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(s*0.5, -s*0.6, s*0.35, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Ojos blancos
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-s*0.5, -s*0.65, s*0.22, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s*0.5, -s*0.65, s*0.22, 0, Math.PI*2);
+    ctx.fill();
+
+    // Pupilas
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(-s*0.45, -s*0.68, s*0.1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s*0.55, -s*0.68, s*0.1, 0, Math.PI*2);
+    ctx.fill();
+
+    // Boca
+    ctx.strokeStyle = '#1a8a25';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, s*0.1, s*0.35, 0.1*Math.PI, 0.9*Math.PI);
+    ctx.stroke();
+
+    // Patas traseras
+    ctx.fillStyle = '#2ecc40';
+    ctx.strokeStyle = '#1a8a25';
+    ctx.lineWidth = 1.5;
+    // Izquierda
+    ctx.beginPath();
+    ctx.ellipse(-s*0.9, s*0.3, s*0.3, s*0.2, -0.3, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    // Derecha
+    ctx.beginPath();
+    ctx.ellipse(s*0.9, s*0.3, s*0.3, s*0.2, 0.3, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+
+    // Dedos patas traseras
+    for (let side = -1; side <= 1; side += 2) {
+        for (let d = -1; d <= 1; d++) {
+            const fx = side * s * 0.9 + d * 6;
+            const fy = s * 0.55;
+            ctx.fillStyle = '#2ecc40';
+            ctx.beginPath();
+            ctx.arc(fx, fy, 3, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+
+    // Patas delanteras
+    for (let side = -1; side <= 1; side += 2) {
+        ctx.fillStyle = '#2ecc40';
+        ctx.strokeStyle = '#1a8a25';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(side * s*0.6, s*0.55, s*0.15, s*0.25, side*0.3, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+    }
+
+    // Manchas del cuerpo
+    ctx.fillStyle = '#1a8a25';
+    ctx.beginPath();
+    ctx.arc(-s*0.2, s*0.15, s*0.08, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(s*0.25, -s*0.1, s*0.06, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// --- Dibujar vehículos ---
+function drawVehicle(v) {
+    const x = v.x;
+    const y = v.y * GRID + GRID/2 - GRID*0.35;
+    const w = v.w * GRID;
+    const h = GRID * 0.7;
+
+    ctx.save();
+    if (v.type === 'car_small') {
+        // Coche pequeño rojo
+        ctx.fillStyle = '#e74c3c';
+        roundRect(x, y, w, h, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 1.5;
+        roundRect(x, y, w, h, 6);
+        ctx.stroke();
+        // Ventana
+        ctx.fillStyle = '#85c1e9';
+        const wx = v.dir > 0 ? x + w*0.55 : x + w*0.1;
+        roundRect(wx, y+4, w*0.35, h-8, 3);
+        ctx.fill();
+    } else if (v.type === 'car_med') {
+        // Coche mediano azul
+        ctx.fillStyle = '#3498db';
+        roundRect(x, y, w, h, 6);
+        ctx.fill();
+        ctx.strokeStyle = '#2471a3';
+        ctx.lineWidth = 1.5;
+        roundRect(x, y, w, h, 6);
+        ctx.stroke();
+        // Ventana
+        ctx.fillStyle = '#aed6f1';
+        const wx = v.dir > 0 ? x + w*0.5 : x + w*0.1;
+        roundRect(wx, y+4, w*0.38, h-8, 3);
+        ctx.fill();
+    } else if (v.type === 'car_fast') {
+        // Coche rápido amarillo
+        ctx.fillStyle = '#f39c12';
+        roundRect(x, y, w, h, 5);
+        ctx.fill();
+        ctx.strokeStyle = '#d68910';
+        ctx.lineWidth = 1.5;
+        roundRect(x, y, w, h, 5);
+        ctx.stroke();
+        // Ventana
+        ctx.fillStyle = '#fdebd0';
+        const wx = v.dir > 0 ? x + w*0.5 : x + w*0.1;
+        roundRect(wx, y+4, w*0.38, h-8, 3);
+        ctx.fill();
+    } else if (v.type === 'truck') {
+        // Camión verde
+        // Cabina
+        ctx.fillStyle = '#27ae60';
+        roundRect(x + (v.dir > 0 ? w*0.7 : 0), y, w*0.3, h, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#1e8449';
+        ctx.lineWidth = 1.5;
+        roundRect(x + (v.dir > 0 ? w*0.7 : 0), y, w*0.3, h, 4);
+        ctx.stroke();
+        // Carga
+        ctx.fillStyle = '#8B4513';
+        const cx2 = v.dir > 0 ? x : x + w*0.3;
+        roundRect(cx2, y+2, w*0.65, h-4, 3);
+        ctx.fill();
+        ctx.strokeStyle = '#6b3410';
+        ctx.lineWidth = 1;
+        roundRect(cx2, y+2, w*0.65, h-4, 3);
+        ctx.stroke();
+    }
+
+    // Ruedas
+    ctx.fillStyle = '#2c3e50';
+    const wheelW = 8, wheelH = 5;
+    const positions = [x+10, x+w-10];
+    for (let px of positions) {
+        ctx.fillRect(px, y-2, wheelW, wheelH);
+        ctx.fillRect(px, y+h-3, wheelW, wheelH);
+    }
+
+    // Luces
+    if (v.dir > 0) {
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(x+w-4, y+4, 4, 6);
+        ctx.fillRect(x+w-4, y+h-10, 4, 6);
+    } else {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x, y+4, 4, 6);
+        ctx.fillRect(x, y+h-10, 4, 6);
+    }
+
+    ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y);
+    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r);
+    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h);
+    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r);
+    ctx.quadraticCurveTo(x, y, x+r, y);
+    ctx.closePath();
+}
+
+// --- Dibujar troncos ---
+function drawLog(l) {
+    const x = l.x;
+    const y = l.y * GRID + 4;
+    const w = l.w * GRID;
+    const h = GRID - 8;
+
+    // Tronco de madera
+    ctx.fillStyle = '#8B6914';
+    roundRect(x, y, w, h, 5);
+    ctx.fill();
+
+    ctx.strokeStyle = '#6b4f0a';
+    ctx.lineWidth = 2;
+    roundRect(x, y, w, h, 5);
+    ctx.stroke();
+
+    // Textura de madera (anillos)
+    ctx.strokeStyle = 'rgba(107,79,10,0.4)';
+    ctx.lineWidth = 1;
+    for (let i = x + 20; i < x + w - 10; i += 25) {
+        ctx.beginPath();
+        ctx.moveTo(i, y + 3);
+        ctx.lineTo(i, y + h - 3);
+        ctx.stroke();
+    }
+
+    // Nudos
+    ctx.fillStyle = 'rgba(90,60,10,0.5)';
+    for (let i = x + 15; i < x + w - 15; i += 40) {
+        ctx.beginPath();
+        ctx.arc(i, y + h/2, 3, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+// --- Dibujar tortugas ---
+function drawTurtle(t) {
+    const x = t.x;
+    const cy = t.y * GRID + GRID/2;
+    const w = t.w * GRID;
+    const h = GRID - 10;
+
+    for (let i = 0; i < t.w; i++) {
+        const tx = x + i * GRID + GRID/2;
+        // Caparazón
+        ctx.fillStyle = '#2d8a4e';
+        ctx.beginPath();
+        ctx.ellipse(tx, cy, GRID*0.35, h*0.45, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = '#1a5c32';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Patrón del caparazón
+        ctx.fillStyle = '#3da864';
+        ctx.beginPath();
+        ctx.ellipse(tx, cy-2, GRID*0.18, h*0.25, 0, 0, Math.PI*2);
+        ctx.fill();
+
+        // Cabeza
+        const headX = t.dir > 0 ? tx + GRID*0.3 : tx - GRID*0.3;
+        ctx.fillStyle = '#2d8a4e';
+        ctx.beginPath();
+        ctx.arc(headX, cy, 5, 0, Math.PI*2);
+        ctx.fill();
+
+        // Ojos
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(headX + (t.dir>0?3:-3), cy-3, 2.5, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+// --- Dibujar fondo del río ---
+function drawRiver() {
+    // Agua con animación
+    const time = Date.now() / 1000;
+    for (let r of RIVER_ROWS) {
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(0, r * GRID, W, GRID);
+
+        // Ondas
+        ctx.strokeStyle = 'rgba(52,152,219,0.3)';
+        ctx.lineWidth = 2;
+        for (let y = r*GRID + 8; y < (r+1)*GRID - 4; y += 12) {
+            ctx.beginPath();
+            for (let x = 0; x < W; x += 5) {
+                const waveY = y + Math.sin((x + time * 60) / 30) * 3;
+                if (x === 0) ctx.moveTo(x, waveY);
+                else ctx.lineTo(x, waveY);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // Borde del río
+    ctx.fillStyle = '#2d6a4f';
+    ctx.fillRect(0, RIVER_ROWS[0]*GRID - 3, W, 3);
+    ctx.fillRect(0, (RIVER_ROWS[RIVER_ROWS.length-1]+1)*GRID, W, 3);
+
+    // Hierba en bordes del río
+    for (let r of [RIVER_ROWS[0]-1, RIVER_ROWS[RIVER_ROWS.length-1]+1]) {
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(0, r*GRID, W, GRID);
+        // Detalles de hierba
+        ctx.fillStyle = '#2ecc71';
+        for (let x = 0; x < W; x += 20) {
+            const h = 5 + Math.sin(x * 0.3) * 3;
+            ctx.fillRect(x, r*GRID + GRID - h, 8, h);
+        }
+    }
+}
+
+// --- Dibujar carretera ---
+function drawRoad() {
+    for (let r of ROAD_ROWS) {
+        // Asfalto
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(0, r * GRID, W, GRID);
+
+        // Líneas de carril
+        ctx.strokeStyle = 'rgba(241,196,15,0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([10, 10]);
+        for (let x = 0; x < W; x += GRID/2) {
+            ctx.beginPath();
+            ctx.moveTo(x, r * GRID + GRID/2);
+            ctx.lineTo(x + GRID/2, r * GRID + GRID/2);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        // Bordes de la carretera
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillRect(0, r*GRID - 1, W, 2);
+        ctx.fillRect(0, (r+1)*GRID - 1, W, 2);
+    }
+
+    // Zona segura entre río y carretera
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(0, ROAD_ROWS[4]*GRID + GRID, W, GRID*3);
+
+    // Hierba decorativa
+    ctx.fillStyle = '#2ecc71';
+    for (let x = 0; x < W; x += 15) {
+        const h = 4 + Math.sin(x * 0.5) * 2;
+        ctx.fillRect(x, ROAD_ROWS[4]*GRID + GRID*3 - h, 6, h);
+    }
+}
+
+// --- Dibujar zona de inicio ---
+function drawStartZone() {
+    ctx.fillStyle = '#1e8449';
+    ctx.fillRect(0, 13 * GRID, W, GRID);
+
+    // Hierba
+    ctx.fillStyle = '#2ecc71';
+    for (let x = 0; x < W; x += 12) {
+        const h = 5 + Math.sin(x*0.4 + Date.now()/500) * 3;
+        ctx.fillRect(x, 13*GRID + GRID - h, 6, h);
+    }
+
+    // Sapo inicial (decorativo)
+    if (gameState === 'playing') {
+        drawFrog(7*GRID, 13*GRID);
+    }
+}
+
+// --- Dibujar zona de meta (homes) ---
+function drawHomeZone() {
+    // Fondo del agua superior
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(0, 0, W, GRID * 3);
+
+    // Ondas animadas
+    const time = Date.now() / 1000;
+    ctx.strokeStyle = 'rgba(52,152,219,0.3)';
+    ctx.lineWidth = 2;
+    for (let r of [0, 1]) {
+        ctx.beginPath();
+        for (let x = 0; x < W; x += 5) {
+            const waveY = r*GRID + GRID/2 + Math.sin((x + time*60)/30)*3;
+            if (x === 0) ctx.moveTo(x, waveY);
+            else ctx.lineTo(x, waveY);
+        }
+        ctx.stroke();
+    }
+
+    // Slots de casa
+    const slotPositions = [1.5, 4.5, 7.5, 10.5, 13.5];
+    for (let i = 0; i < 5; i++) {
+        const sx = slotPositions[i] * GRID - GRID/2;
+
+        // Hueco de agua
+        ctx.fillStyle = homeSlots[i] ? '#1a8a25' : '#0d3b5e';
+        roundRect(sx, GRID*0.5, GRID, GRID*2, 6);
+        ctx.fill();
+
+        if (homeSlots[i]) {
+            // Sapo en casa
+            drawFrog(sx + GRID/2 - GRID/2, GRID*0.5 + GRID/2 - GRID/2);
+        } else {
+            // Indicador de hueco vacío
+            ctx.strokeStyle = 'rgba(57,255,20,0.3)';
+            ctx.lineWidth = 1;
+            roundRect(sx+4, GRID*0.5+4, GRID-8, GRID*2-8, 4);
+            ctx.stroke();
+
+            // Signo de interrogación
+            ctx.fillStyle = 'rgba(57,255,20,0.15)';
+            ctx.font = 'bold 20px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText('?', sx + GRID/2, GRID*1.8);
+        }
+    }
+
+    // Conectores (canales hacia los slots)
+    for (let i = 0; i < 5; i++) {
+        const cx = slotPositions[i] * GRID - GRID/4;
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(cx, GRID*3, GRID/2, GRID);
+    }
+
+    // Borde inferior del agua superior
+    ctx.fillStyle = '#2d6a4f';
+    ctx.fillRect(0, GRID*3 - 2, W, 3);
+}
+
+// --- Dibujar partículas ---
+function drawParticles() {
+    for (let p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function spawnParticles(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x: x + Math.random()*GRID,
+            y: y + Math.random()*GRID,
+            vx: (Math.random()-0.5)*4,
+            vy: (Math.random()-0.5)*4,
+            life: 1,
+            decay: 0.02 + Math.random()*0.03,
+            size: 2 + Math.random()*4,
+            color: color
+        });
+    }
+}
+
+// --- Actualizar partículas ---
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+
+// --- Dibujar pantalla de Game Over / Win ---
+function drawOverlay() {
+    if (gameState === 'gameover') {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 48px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', W/2, H/2 - 30);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Courier New';
+        ctx.fillText(`Puntuación: ${score}`, W/2, H/2 + 20);
+
+        ctx.fillStyle = '#aaa';
+        ctx.font = '16px Courier New';
+        ctx.fillText('Presiona REINICIAR para jugar de nuevo', W/2, H/2 + 60);
+    } else if (gameState === 'win') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = '#39ff14';
+        ctx.font = 'bold 42px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('¡NIVEL COMPLETADO!', W/2, H/2 - 30);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Courier New';
+        ctx.fillText(`Puntuación: ${score}`, W/2, H/2 + 20);
+
+        ctx.fillStyle = '#aaa';
+        ctx.font = '16px Courier New';
+        ctx.fillText('Siguiente nivel...', W/2, H/2 + 60);
+    } else if (gameState === 'dead') {
+        // Animación de muerte
+        const t = deathTimer / 60;
+        ctx.fillStyle = `rgba(255,0,0,${t * 0.3})`;
+        ctx.fillRect(0, 0, W, H);
+
+        if (deathTimer > 30) {
+            // Estrellas de muerte
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 + deathTimer * 0.1;
+                const dist = 20 + Math.sin(deathTimer*0.2)*10;
+                ctx.fillStyle = '#f39c12';
+                ctx.font = '14px serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('★', frog.x + GRID/2 + Math.cos(angle)*dist, frog.y + GRID/2 + Math.sin(angle)*dist);
+            }
+        }
+    }
+}
+
+// --- Colisiones ---
+function rectCollision(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+function frogRect() {
+    const padding = 6;
+    return {
+        x: frog.x + padding,
+        y: frog.y + padding,
+        w: GRID - padding*2,
+        h: GRID - padding*2
+    };
+}
+
+// --- Lógica de actualización ---
+function update() {
+    if (gameState === 'dead') {
+        deathTimer++;
+        if (deathTimer > 60) {
+            lives--;
+            updateLivesDisplay();
+            if (lives <= 0) {
+                gameState = 'gameover';
+                playSound('gameover');
+            } else {
+                resetFrog();
+                gameState = 'playing';
+            }
+        }
+        return;
+    }
+
+    if (gameState !== 'playing') return;
+
+    // Actualizar vehículos
+    for (let v of vehicles) {
+        v.x += v.speed * v.dir;
+        // Wrap around
+        if (v.dir > 0 && v.x > W + 50) v.x = -v.w * GRID - Math.random()*100;
+        if (v.dir < 0 && v.x < -v.w * GRID - 50) v.x = W + Math.random()*100;
+    }
+
+    // Actualizar troncos
+    for (let l of logs) {
+        l.x += l.speed * l.dir;
+        if (l.dir > 0 && l.x > W + 50) l.x = -l.w * GRID;
+        if (l.dir < 0 && l.x < -l.w * GRID - 50) l.x = W + Math.random()*100;
+    }
+
+    // Actualizar tortugas
+    for (let t of turtles) {
+        t.x += t.speed * t.dir;
+        if (t.dir > 0 && t.x > W + 50) t.x = -t.w * GRID;
+        if (t.dir < 0 && t.x < -t.w * GRID - 50) t.x = W + Math.random()*100;
+    }
+
+    // Verificar si el sapo está en el río
+    const frogRow = Math.floor(frog.y / GRID);
+    let onLog = false;
+    let onTurtle = false;
+
+    if (RIVER_ROWS.includes(frogRow)) {
+        // Verificar colisión con troncos o tortugas
+        for (let l of logs) {
+            if (l.y === frogRow && rectCollision(frog.x+4, frog.y+4, GRID-8, GRID-8, l.x, l.y*GRID+2, l.w*GRID, GRID-4)) {
+                onLog = true;
+                break;
+            }
+        }
+        if (!onLog) {
+            for (let t of turtles) {
+                if (t.y === frogRow && rectCollision(frog.x+4, frog.y+4, GRID-8, GRID-8, t.x, t.y*GRID+2, t.w*GRID, GRID-4)) {
+                    onTurtle = true;
+                    break;
+                }
+            }
+        }
+
+        if (!onLog && !onTurtle) {
+            // El sapo se ahoga
+            die();
+            return;
+        }
+
+        // Mover el sapo con el tronco/tortuga
+        if (onLog) {
+            const log = logs.find(l => l.y === frogRow && rectCollision(frog.x+4, frog.y+4, GRID-8, GRID-8, l.x, l.y*GRID+2, l.w*GRID, GRID-4));
+            if (log) frog.x += log.speed * log.dir;
+        } else if (onTurtle) {
+            const turtle = turtles.find(t => t.y === frogRow && rectCollision(frog.x+4, frog.y+4, GRID-8, GRID-8, t.x, t.y*GRID+2, t.w*GRID, GRID-4));
+            if (turtle) frog.x += turtle.speed * turtle.dir;
+        }
+
+        // Verificar si salió del mapa en el río
+        if (frog.x < -GRID/2 || frog.x > W - GRID/2) {
+            die();
+            return;
+        }
+    }
+
+    // Verificar colisión con vehículos
+    const fr = frogRect();
+    for (let v of vehicles) {
+        const vx = v.x;
+        const vy = v.y * GRID + GRID*0.15;
+        const vw = v.w * GRID;
+        const vh = GRID * 0.7;
+
+        if (rectCollision(fr.x, fr.y, fr.w, fr.h, vx, vy, vw, vh)) {
+            die();
+            return;
+        }
+    }
+
+    // Verificar si llegó a la zona de meta
+    if (frogRow <= 2) {
+        const slotPositions = [1.5, 4.5, 7.5, 10.5, 13.5];
+        let landedInSlot = false;
+
+        for (let i = 0; i < 5; i++) {
+            const sx = slotPositions[i] * GRID - GRID/2;
+            if (frog.x + GRID/2 > sx && frog.x + GRID/2 < sx + GRID) {
+                if (!homeSlots[i]) {
+                    homeSlots[i] = true;
+                    score += 100 + level * 50;
+                    updateScoreDisplay();
+                    playSound('home');
+                    spawnParticles(frog.x, frog.y, '#39ff14', 20);
+
+                    // Verificar si completó todos los slots
+                    if (homeSlots.every(s => s)) {
+                        gameState = 'win';
+                        score += 500;
+                        updateScoreDisplay();
+                        playSound('win');
+                    } else {
+                        resetFrog();
+                    }
+                }
+                landedInSlot = true;
+                break;
+            }
+        }
+
+        if (!landedInSlot) {
+            // Tocó agua entre slots - muere
+            die();
+        }
+    }
+
+    updateParticles();
+}
+
+function die() {
+    gameState = 'dead';
+    deathTimer = 0;
+    playSound('crash');
+    spawnParticles(frog.x, frog.y, '#e74c3c', 15);
+    spawnParticles(frog.x, frog.y, '#f39c12', 10);
+}
+
+// --- Movimiento del sapo ---
+function moveFrog(dir) {
+    if (gameState !== 'playing') return;
+    initAudio();
+
+    const oldX = frog.x;
+    const oldY = frog.y;
+
+    switch(dir) {
+        case 'up':    frog.y -= GRID; break;
+        case 'down':  frog.y += GRID; break;
+        case 'left':  frog.x -= GRID; break;
+        case 'right': frog.x += GRID; break;
+    }
+
+    // Limitar al canvas
+    if (frog.x < 0) frog.x = oldX;
+    if (frog.x > W - GRID) frog.x = oldX;
+    if (frog.y < 0) frog.y = oldY;
+    if (frog.y > H - GRID) frog.y = oldY;
+
+    if (frog.x !== oldX || frog.y !== oldY) {
+        playSound('jump');
+        score += 10;
+        updateScoreDisplay();
+    }
+}
+
+function mobileInput(dir) {
+    initAudio();
+    moveFrog(dir);
+}
+
+// --- Controles de teclado ---
+document.addEventListener('keydown', (e) => {
+    switch(e.key) {
+        case 'ArrowUp':    e.preventDefault(); moveFrog('up'); break;
+        case 'ArrowDown':  e.preventDefault(); moveFrog('down'); break;
+        case 'ArrowLeft':  e.preventDefault(); moveFrog('left'); break;
+        case 'ArrowRight': e.preventDefault(); moveFrog('right'); break;
+        case 'r': case 'R': resetGame(); break;
+    }
+});
+
+// --- Touch / Swipe en canvas ---
+let touchStartX = 0, touchStartY = 0;
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    initAudio();
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (Math.max(absDx, absDy) < 15) return; // muy pequeño
+
+    if (absDx > absDy) {
+        moveFrog(dx > 0 ? 'right' : 'left');
+    } else {
+        moveFrog(dy > 0 ? 'down' : 'up');
+    }
+}, { passive: false });
+
+// --- Display updates ---
+function updateScoreDisplay() {
+    document.getElementById('scoreVal').textContent = score;
+}
+
+function updateLivesDisplay() {
+    let hearts = '';
+    for (let i = 0; i < lives; i++) hearts += '♥';
+    for (let i = lives; i < 3; i++) hearts += '♡';
+    document.getElementById('livesVal').textContent = hearts;
+}
+
+function updateLevelDisplay() {
+    document.getElementById('levelVal').textContent = level;
+}
+
+// --- Reset del juego ---
+function resetGame() {
+    initAudio();
+    score = 0;
+    lives = 3;
+    level = 1;
+    gameState = 'playing';
+    deathTimer = 0;
+    homeSlots = [false, false, false, false, false];
+    particles = [];
+    updateScoreDisplay();
+    updateLivesDisplay();
+    updateLevelDisplay();
+    resetFrog();
+    initVehicles();
+    initLogs();
+}
+
+// --- Nivel superior completado ---
+function nextLevel() {
+    level++;
+    homeSlots = [false, false, false, false, false];
+    resetFrog();
+    updateLevelDisplay();
+    gameState = 'playing';
+    initVehicles();
+    initLogs();
+}
+
+// --- Loop principal ---
+let lastTime = 0;
+function gameLoop(timestamp) {
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    // Limpiar canvas
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
+
+    // Dibujar capas del juego
+    drawHomeZone();       // Zona superior (río + homes)
+    drawRiver();          // Río medio
+    drawRoad();           // Carretera
+    drawStartZone();      // Zona inferior
+
+    // Dibujar troncos y tortugas
+    for (let l of logs) drawLog(l);
+    for (let t of turtles) drawTurtle(t);
+
+    // Dibujar vehículos
+    for (let v of vehicles) drawVehicle(v);
+
+    // Dibujar sapo (si no está muriendo)
+    if (gameState === 'playing') {
+        drawFrog(frog.x, frog.y);
+    } else if (gameState === 'dead' && deathTimer < 30) {
+        // Sapo desaparece gradualmente
+        ctx.globalAlpha = 1 - (deathTimer / 30);
+        drawFrog(frog.x, frog.y);
+        ctx.globalAlpha = 1;
+    }
+
+    // Partículas
+    drawParticles();
+
+    // Overlay de game over / win
+    drawOverlay();
+
+    // Actualizar lógica
+    update();
+
+    requestAnimationFrame(gameLoop);
+}
+
+// --- Iniciar juego ---
+resetGame();
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
