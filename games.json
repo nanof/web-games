@@ -5,6 +5,15 @@
   },
   "games": [
     {
+      "id": "asteroids",
+      "title": "Asteroids",
+      "description": "Clon clásico de Asteroids con OVNIs mejorados y efectos de sonido",
+      "path": "games/asteroids/index.html",
+      "thumbnail": "games/asteroids/screenshot.png",
+      "tags": ["Cursor"],
+      "date": "2026-05-29"
+    },
+    {
       "id": "Asteroids 27b",
       "title": "Asteroids 27b",
       "description": "Asteroids  27b",
