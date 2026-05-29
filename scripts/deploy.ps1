@@ -18,9 +18,11 @@ if ($LASTEXITCODE -ne 0) {
 $owner = (gh api user --jq .login)
 Write-Host "Usuario: $owner"
 
-if (-not (git remote get-url origin 2>$null)) {
+$hasOrigin = @(git remote) -contains "origin"
+if (-not $hasOrigin) {
     Write-Host "Creando repositorio $RepoName en GitHub..."
     gh repo create $RepoName --public --source=. --remote=origin --description "Portal de juegos HTML5"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 Write-Host "Subiendo cambios a main..."
