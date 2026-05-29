@@ -1,15 +1,24 @@
 {
   "site": {
-    "title": "Mis Juegos HTML5",
-    "description": "Colección de juegos hechos en el navegador"
+    "title": "GAImes",
+    "description": "Comparison of games created using different AI models but the same prompt"
   },
   "games": [
     {
       "id": "asteroids",
       "title": "Asteroids",
-      "description": "Clon clásico de Asteroids con OVNIs mejorados y efectos de sonido",
+      "description": "A classic Asteroids clone with upgraded UFOs and sound effects",
       "path": "games/asteroids/index.html",
       "thumbnail": "games/asteroids/screenshot.png",
+      "tags": ["Cursor"],
+      "date": "2026-05-29"
+    },
+    {
+      "id": "arkanoid-cursor",
+      "title": "Arkanoid",
+      "description": "Clon arcade de Arkanoid con power-ups, láser y efectos de sonido",
+      "path": "games/arkanoid-cursor/index.html",
+      "thumbnail": "games/arkanoid-cursor/screenshot.png",
       "tags": ["Cursor"],
       "date": "2026-05-29"
     },
