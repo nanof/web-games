@@ -6,7 +6,7 @@ async function loadCatalog() {
   const descEl = document.getElementById("site-description");
 
   try {
-    const response = await fetch("games.json");
+    const response = await fetch(`games.json?v=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`No se pudo cargar games.json (${response.status})`);
     }
