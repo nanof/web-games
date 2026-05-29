@@ -26,25 +26,41 @@ if (-not $hasOrigin) {
 }
 
 Write-Host "Subiendo cambios a main..."
-git push -u origin main
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+git push -u origin main 2>&1 | ForEach-Object { Write-Host $_ }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Activando GitHub Pages..."
-gh api -X POST "/repos/$owner/$RepoName/pages" `
-    -f "source[branch]=main" `
-    -f "source[path]=/" `
-    2>$null
-
-if ($LASTEXITCODE -ne 0) {
-    gh api -X PUT "/repos/$owner/$RepoName/pages" `
-        -f "source[branch]=main" `
-        -f "source[path]=/" `
-        2>$null
+Write-Host "Comprobando GitHub Pages..."
+$pagesExists = $false
+try {
+    gh api "/repos/$owner/$RepoName/pages" 2>$null | Out-Null
+    $pagesExists = ($LASTEXITCODE -eq 0)
+} catch {
+    $pagesExists = $false
 }
+
+if ($pagesExists) {
+    Write-Host "GitHub Pages ya esta activo."
+} else {
+    Write-Host "Activando GitHub Pages..."
+    gh api -X POST "/repos/$owner/$RepoName/pages" `
+        -f "source[branch]=main" `
+        -f "source[path]=/" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        gh api -X PUT "/repos/$owner/$RepoName/pages" `
+            -f "source[branch]=main" `
+            -f "source[path]=/" 2>$null | Out-Null
+    }
+}
+$ErrorActionPreference = $prevEap
 
 $pagesUrl = "https://$owner.github.io/$RepoName/"
 Write-Host ""
-Write-Host "Listo. Tu sitio estara disponible en unos minutos en:"
+Write-Host "Listo. Tu sitio esta en:"
 Write-Host $pagesUrl
 Write-Host ""
-Write-Host "Opcional: anade en games.json -> site.repo la URL del repo:"
-Write-Host "https://github.com/$owner/$RepoName"
+Write-Host "Repositorio: https://github.com/$owner/$RepoName"
+Write-Host ""
+Write-Host "Si ves 'credential-manager-core is not a git command', ejecuta una vez:"
+Write-Host "  gh auth setup-git"
